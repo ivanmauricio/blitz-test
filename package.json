@@ -1,12 +1,74 @@
 {
-  "name": "blitz-test",
+  "name": "audrey-real-time-spike",
   "version": "1.0.0",
-  "description": "Template for starting projects",
-  "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "blitz start",
+    "studio": "blitz db studio",
+    "build": "blitz build",
+    "lint": "eslint --ignore-path .gitignore --ext .js,.ts,.tsx .",
+    "test": "jest",
+    "test:watch": "jest --watch"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC"
+  "browserslist": [
+    "defaults"
+  ],
+  "prisma": {
+    "schema": "db/schema.prisma"
+  },
+  "prettier": {
+    "semi": false,
+    "printWidth": 100
+  },
+  "husky": {
+    "hooks": {
+      "pre-commit": "tsc && lint-staged && pretty-quick --staged",
+      "pre-push": "npm lint && npm test"
+    }
+  },
+  "lint-staged": {
+    "*.{js,ts,tsx}": [
+      "eslint --fix"
+    ]
+  },
+  "dependencies": {
+    "@prisma/cli": "2.x",
+    "@prisma/client": "2.x",
+    "blitz": "0.23.2",
+    "react": "0.0.0-experimental-7f28234f8",
+    "react-dom": "0.0.0-experimental-7f28234f8",
+    "react-error-boundary": "2.3.2",
+    "secure-password": "4.0.0",
+    "zod": "1.x",
+    "final-form": "4.20.1",
+    "react-final-form": "6.5.1"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "5.11.4",
+    "@testing-library/react": "11.x",
+    "@testing-library/react-hooks": "3.x",
+    "@types/jest": "26.x",
+    "@types/react": "16.x",
+    "@types/secure-password": "3.1.0",
+    "@typescript-eslint/eslint-plugin": "4.x",
+    "@typescript-eslint/parser": "4.x",
+    "babel-eslint": "10.1.0",
+    "eslint": "7.x",
+    "eslint-config-react-app": "5.x",
+    "eslint-plugin-flowtype": "5.x",
+    "eslint-plugin-import": "2.22.1",
+    "eslint-plugin-jsx-a11y": "6.x",
+    "eslint-plugin-react": "7.21.2",
+    "eslint-plugin-react-hooks": "4.x",
+    "husky": "4.x",
+    "jest": "26.x",
+    "jest-environment-jsdom-fourteen": "1.0.1",
+    "jest-watch-typeahead": "0.6.1",
+    "react-test-renderer": "16.x",
+    "lint-staged": "10.x",
+    "prettier": "2.x",
+    "pretty-quick": "3.x",
+    "typescript": "4.x",
+    "ts-jest": "26.x"
+  },
+  "private": true
 }
