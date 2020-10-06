@@ -2,7 +2,9 @@ import { Link, BlitzPage } from "blitz"
 import Layout from "app/layouts/Layout"
 import logout from "app/auth/mutations/logout"
 import { useCurrentUser } from "app/hooks/useCurrentUser"
-import { Suspense } from "react"
+import { Suspense, useEffect } from "react"
+import Pusher from "pusher-js"
+import { getAntiCSRFToken } from "blitz"
 
 /*
  * This file is just for a pleasant getting started page for your new app.
@@ -11,7 +13,6 @@ import { Suspense } from "react"
 
 const UserInfo = () => {
   const currentUser = useCurrentUser()
-
   if (currentUser) {
     return (
       <>
@@ -49,9 +50,63 @@ const UserInfo = () => {
 }
 
 const Home: BlitzPage = () => {
+  const code = useEffect(() => {
+    const antiCSRFToken = getAntiCSRFToken()
+
+    // Pusher.logToConsole = true
+    const pusher = new Pusher("f9ad5b2d18011941ea45", {
+      // Replace with 'key' from dashboard
+      cluster: "eu", // Replace with 'cluster' from dashboard
+      forceTLS: true,
+      authEndpoint: "https://blitz-test.ivanmauricio.vercel.app/api/auth",
+      auth: {
+        headers: {
+          "anti-csrf": antiCSRFToken,
+        },
+      },
+    })
+
+    const channel = pusher.subscribe("presence-quickstart")
+
+    const hashCode = (s) => {
+      console.log({ s })
+
+      return `${s}`.split("").reduce((a, b) => {
+        a = (a << 5) - a + b.charCodeAt(0)
+        return a & a
+      }, 0)
+    }
+    function addMemberToUserList({ id, info }) {
+      const userEl = document.createElement("div")
+      userEl.id = "user_" + id
+      userEl.innerText = info.email
+      userEl.style.backgroundColor = `hsl(${hashCode(parseInt(id)) % 360}' ,70%,60%)`
+      document?.getElementById("user_list")?.appendChild(userEl)
+    }
+    channel.bind("pusher:subscription_succeeded", () =>
+      //@ts-ignore
+      channel.members.each((member) => {
+        // console.log({ member })
+
+        addMemberToUserList(member)
+      })
+    )
+    channel.bind("pusher:member_added", (member) => {
+      console.log({ member })
+
+      addMemberToUserList(member)
+    })
+    channel.bind("pusher:member_removed", (member) => {
+      const userEl = document.getElementById("user_" + member.id)
+      userEl?.parentNode?.removeChild(userEl)
+    })
+  }, [])
+
   return (
     <div className="container">
       <main>
+        <div id="user_list"></div>
+
         <div className="logo">
           <img src="/logo.png" alt="blitz.js" />
         </div>
@@ -249,6 +304,19 @@ const Home: BlitzPage = () => {
             width: 100%;
             flex-direction: column;
           }
+        }
+        body {
+          margin: 1em;
+        }
+        #user_list div {
+          margin-left: -12px;
+          font-family: sans-serif;
+          text-align: center;
+          line-height: 40px;
+          border-radius: 50%;
+          border: 3px solid white;
+          color: green;
+          background-color: yellow;
         }
       `}</style>
     </div>

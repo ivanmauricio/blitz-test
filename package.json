@@ -4,7 +4,7 @@
   "scripts": {
     "start": "blitz start",
     "studio": "blitz db studio",
-    "build": "blitz build",
+    "build": "NODE_ENV=production blitz db migrate && blitz build",
     "lint": "eslint --ignore-path .gitignore --ext .js,.ts,.tsx .",
     "test": "jest",
     "test:watch": "jest --watch"
@@ -34,13 +34,15 @@
     "@prisma/cli": "2.x",
     "@prisma/client": "2.x",
     "blitz": "0.23.2",
+    "final-form": "4.20.1",
+    "pusher": "3.0.1",
+    "pusher-js": "7.0.0",
     "react": "0.0.0-experimental-7f28234f8",
     "react-dom": "0.0.0-experimental-7f28234f8",
     "react-error-boundary": "2.3.2",
+    "react-final-form": "6.5.1",
     "secure-password": "4.0.0",
-    "zod": "1.x",
-    "final-form": "4.20.1",
-    "react-final-form": "6.5.1"
+    "zod": "1.x"
   },
   "devDependencies": {
     "@testing-library/jest-dom": "5.11.4",
