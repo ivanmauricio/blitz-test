@@ -35,6 +35,7 @@
     "@prisma/client": "2.x",
     "blitz": "0.23.2",
     "final-form": "4.20.1",
+    "lodash": "4.17.20",
     "pusher": "3.0.1",
     "pusher-js": "7.0.0",
     "react": "0.0.0-experimental-7f28234f8",
@@ -65,12 +66,12 @@
     "jest": "26.x",
     "jest-environment-jsdom-fourteen": "1.0.1",
     "jest-watch-typeahead": "0.6.1",
-    "react-test-renderer": "16.x",
     "lint-staged": "10.x",
     "prettier": "2.x",
     "pretty-quick": "3.x",
-    "typescript": "4.x",
-    "ts-jest": "26.x"
+    "react-test-renderer": "16.x",
+    "ts-jest": "26.x",
+    "typescript": "4.x"
   },
   "private": true
 }

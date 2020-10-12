@@ -5,6 +5,7 @@ import { useCurrentUser } from "app/hooks/useCurrentUser"
 import { Suspense, useEffect } from "react"
 import Pusher from "pusher-js"
 import { getAntiCSRFToken } from "blitz"
+import _ from "lodash"
 
 /*
  * This file is just for a pleasant getting started page for your new app.
@@ -58,7 +59,7 @@ const Home: BlitzPage = () => {
       // Replace with 'key' from dashboard
       cluster: "eu", // Replace with 'cluster' from dashboard
       forceTLS: true,
-      authEndpoint: "https://blitz-test.ivanmauricio.vercel.app/api/auth",
+      authEndpoint: `${process.env.NEXT_PUBLIC_HOST_URL}/api/auth`,
       auth: {
         headers: {
           "anti-csrf": antiCSRFToken,
@@ -69,8 +70,6 @@ const Home: BlitzPage = () => {
     const channel = pusher.subscribe("presence-quickstart")
 
     const hashCode = (s) => {
-      console.log({ s })
-
       return `${s}`.split("").reduce((a, b) => {
         a = (a << 5) - a + b.charCodeAt(0)
         return a & a
@@ -80,20 +79,54 @@ const Home: BlitzPage = () => {
       const userEl = document.createElement("div")
       userEl.id = "user_" + id
       userEl.innerText = info.email
-      userEl.style.backgroundColor = `hsl(${hashCode(parseInt(id)) % 360}' ,70%,60%)`
       document?.getElementById("user_list")?.appendChild(userEl)
+      userEl.style.backgroundColor = `hsl(${hashCode(parseInt(id)) % 360},70%,60%)`
     }
-    channel.bind("pusher:subscription_succeeded", () =>
-      //@ts-ignore
-      channel.members.each((member) => {
-        // console.log({ member })
 
-        addMemberToUserList(member)
-      })
+    const height = Math.max(
+      document.body.scrollHeight,
+      document.body.offsetHeight,
+      document.body.clientHeight
     )
-    channel.bind("pusher:member_added", (member) => {
-      console.log({ member })
 
+    const width = Math.max(
+      document.body.scrollWidth,
+      document.body.offsetWidth,
+      document.body.clientWidth
+    )
+
+    console.log({ height, width })
+
+    channel.bind("pusher:subscription_succeeded", () => {
+      // @ts-ignore
+      channel.members.each((member) => {
+        addMemberToUserList(member)
+        const span = document.createElement("span")
+        span.innerHTML = `&#8598; ${member.info.email.slice(0, 2)}`
+        span.className = `cursor-${member.id} cursor`
+        document.body.appendChild(span)
+      })
+
+      channel.bind("client-mousemove", ({ x, y }, { user_id }) => {
+        const cursor = document.querySelector(`.cursor-${user_id}`)
+        console.log({ cursor })
+
+        // eslint-disable-next-line
+        cursor
+          ? //@ts-ignore
+            (document.querySelector(`.cursor-${user_id}`).style.cssText = `left: ${
+              x * width
+            }px; top: ${y * height}px; color: hsl(${hashCode(parseInt(user_id)) % 360},70%,60%);`)
+          : null
+      })
+      const mouseMove = (e) => {
+        channel.trigger("client-mousemove", { x: e.pageX / width, y: e.pageY / height })
+      }
+
+      document.addEventListener("mousemove", _.throttle(mouseMove, 125))
+    })
+
+    channel.bind("pusher:member_added", (member) => {
       addMemberToUserList(member)
     })
     channel.bind("pusher:member_removed", (member) => {
@@ -176,8 +209,6 @@ const Home: BlitzPage = () => {
       </footer>
 
       <style jsx global>{`
-        @import url("https://fonts.googleapis.com/css2?family=Libre+Franklin:wght@300;700&display=swap");
-
         html,
         body {
           padding: 0;
@@ -315,8 +346,11 @@ const Home: BlitzPage = () => {
           line-height: 40px;
           border-radius: 50%;
           border: 3px solid white;
-          color: green;
-          background-color: yellow;
+          color: white;
+          font-weight: bold;
+        }
+        .cursor {
+          position: absolute;
         }
       `}</style>
     </div>
