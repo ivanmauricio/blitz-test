@@ -50,7 +50,13 @@ const UserInfo = () => {
   }
 }
 
-const Home: BlitzPage = () => {
+type PageProps = {
+  xr_id: string
+}
+
+const Home: BlitzPage<PageProps> = ({ xr_id }) => {
+  // console.log({ xr_id })
+
   const code = useEffect(() => {
     const height = Math.max(
       document.body.scrollHeight,
@@ -79,7 +85,7 @@ const Home: BlitzPage = () => {
       },
     })
 
-    const channel = pusher.subscribe("presence-quickstart")
+    const channel = pusher.subscribe(`presence-quickstart-${xr_id}`)
 
     const hashCode = (s) => {
       return `${s}`.split("").reduce((a, b) => {
@@ -127,13 +133,21 @@ const Home: BlitzPage = () => {
 
     channel.bind("pusher:member_added", (member) => {
       addMemberToUserList(member)
+      const span = document.createElement("span")
+      span.innerHTML = `&#8598; ${member.info.email.slice(0, 2)}`
+      span.className = `cursor-${member.id} cursor`
+      document.body.appendChild(span)
     })
 
     channel.bind("pusher:member_removed", (member) => {
       const userEl = document.getElementById("user_" + member.id)
       userEl?.parentNode?.removeChild(userEl)
+      const cursorEl = document.querySelector(`.cursor-${member.id}`)
+      console.log({ cursorEl, member })
+
+      cursorEl?.parentNode?.removeChild(cursorEl)
     })
-  }, [])
+  }, [xr_id])
 
   return (
     <div className="container">
@@ -358,5 +372,12 @@ const Home: BlitzPage = () => {
 }
 
 Home.getLayout = (page) => <Layout title="Home">{page}</Layout>
+
+export const getServerSideProps = async (context) => {
+  const params = context.params
+  const xr_id: string = params.xr_id
+  const props: PageProps = { xr_id }
+  return { props }
+}
 
 export default Home
