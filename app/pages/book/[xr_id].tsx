@@ -2,7 +2,7 @@ import { Link, BlitzPage } from "blitz"
 import Layout from "app/layouts/Layout"
 import logout from "app/auth/mutations/logout"
 import { useCurrentUser } from "app/hooks/useCurrentUser"
-import { Suspense, useEffect } from "react"
+import { Suspense, useEffect, useState } from "react"
 import Pusher from "pusher-js"
 import { getAntiCSRFToken } from "blitz"
 import _ from "lodash"
@@ -11,6 +11,13 @@ import _ from "lodash"
  * This file is just for a pleasant getting started page for your new app.
  * You can delete everything in here and start from scratch if you like.
  */
+
+const hashCode = (s) => {
+  return `${s}`.split("").reduce((a, b) => {
+    a = (a << 5) - a + b.charCodeAt(0)
+    return a & a
+  }, 0)
+}
 
 const UserInfo = () => {
   const currentUser = useCurrentUser()
@@ -54,10 +61,18 @@ type PageProps = {
   xr_id: string
 }
 
-const Home: BlitzPage<PageProps> = ({ xr_id }) => {
-  // console.log({ xr_id })
+const views = ["Discussion", "Author", "Mind"]
 
-  const code = useEffect(() => {
+const Home: BlitzPage<PageProps> = ({ xr_id }) => {
+  interface User {
+    id: string
+    info: object
+  }
+
+  const [view, setView] = useState(views[0])
+  const [users, setUsers] = useState<User[]>([])
+
+  useEffect(() => {
     const height = Math.max(
       document.body.scrollHeight,
       document.body.offsetHeight,
@@ -87,29 +102,29 @@ const Home: BlitzPage<PageProps> = ({ xr_id }) => {
 
     const channel = pusher.subscribe(`presence-quickstart-${xr_id}`)
 
-    const hashCode = (s) => {
-      return `${s}`.split("").reduce((a, b) => {
-        a = (a << 5) - a + b.charCodeAt(0)
-        return a & a
-      }, 0)
-    }
-
     function addMemberToUserList({ id, info }) {
+      const { hashedPassword, ...rest_of_info } = info
+      setUsers((users) => [...users, { id, info: rest_of_info }])
       const userEl = document.createElement("div")
       userEl.id = "user_" + id
       userEl.innerText = info.email
       document?.getElementById("user_list")?.appendChild(userEl)
       userEl.style.backgroundColor = `hsl(${hashCode(parseInt(id)) % 360},70%,60%)`
+
+      const span = document.createElement("span")
+      span.innerHTML = `&#8598; ${info.email.slice(0, 2)}`
+      span.className = `cursor-${id} cursor`
+      document.body.appendChild(span)
     }
 
     channel.bind("pusher:subscription_succeeded", () => {
       // @ts-ignore
       channel.members.each((member) => {
         addMemberToUserList(member)
-        const span = document.createElement("span")
-        span.innerHTML = `&#8598; ${member.info.email.slice(0, 2)}`
-        span.className = `cursor-${member.id} cursor`
-        document.body.appendChild(span)
+      })
+
+      channel.bind("pusher:member_added", (member) => {
+        addMemberToUserList(member)
       })
 
       channel.bind("client-mousemove", ({ x, y }, { user_id }) => {
@@ -124,29 +139,22 @@ const Home: BlitzPage<PageProps> = ({ xr_id }) => {
           : null
       })
 
-      const mouseMove = (e) => {
+      channel.bind("pusher:member_removed", (member) => {
+        const userEl = document.getElementById("user_" + member.id)
+        userEl?.parentNode?.removeChild(userEl)
+        const cursorEl = document.querySelector(`.cursor-${member.id}`)
+        console.log({ cursorEl, member })
+
+        cursorEl?.parentNode?.removeChild(cursorEl)
+      })
+    })
+
+    document.addEventListener(
+      "mousemove",
+      _.throttle((e) => {
         channel.trigger("client-mousemove", { x: e.pageX / width, y: e.pageY / height })
-      }
-
-      document.addEventListener("mousemove", _.throttle(mouseMove, 125))
-    })
-
-    channel.bind("pusher:member_added", (member) => {
-      addMemberToUserList(member)
-      const span = document.createElement("span")
-      span.innerHTML = `&#8598; ${member.info.email.slice(0, 2)}`
-      span.className = `cursor-${member.id} cursor`
-      document.body.appendChild(span)
-    })
-
-    channel.bind("pusher:member_removed", (member) => {
-      const userEl = document.getElementById("user_" + member.id)
-      userEl?.parentNode?.removeChild(userEl)
-      const cursorEl = document.querySelector(`.cursor-${member.id}`)
-      console.log({ cursorEl, member })
-
-      cursorEl?.parentNode?.removeChild(cursorEl)
-    })
+      }, 125)
+    )
   }, [xr_id])
 
   return (
@@ -154,36 +162,15 @@ const Home: BlitzPage<PageProps> = ({ xr_id }) => {
       <main>
         <div id="user_list"></div>
 
-        <div className="logo">
-          <img src="/logo.png" alt="blitz.js" />
-        </div>
-        <p>
-          <strong>Congrats!</strong> Your app is ready, including user sign-up and log-in.
-        </p>
         <div className="buttons" style={{ marginTop: "1rem", marginBottom: "5rem" }}>
           <Suspense fallback="Loading...">
             <UserInfo />
           </Suspense>
         </div>
-        <p>
-          <strong>
-            To add a new model to your app, <br />
-            run the following in your terminal:
-          </strong>
-        </p>
-        <pre>
-          <code>blitz generate all project name:string</code>
-        </pre>
-        <pre>
-          <code>blitz db migrate</code>
-        </pre>
 
-        <p>
-          Then go to{" "}
-          <Link href="/projects">
-            <a>/projects</a>
-          </Link>
-        </p>
+        <div style={{ border: "3px dotted black", padding: "3em" }}>{view}</div>
+        <pre>{JSON.stringify(users, null, 2)}</pre>
+
         <div className="buttons" style={{ marginTop: "5rem" }}>
           <a
             className="button"
