@@ -4,9 +4,10 @@ import logout from "app/auth/mutations/logout"
 import { useCurrentUser } from "app/hooks/useCurrentUser"
 import { Suspense, useEffect, useState } from "react"
 import Pusher from "pusher-js"
+import * as PusherTypes from "pusher-js"
 import { getAntiCSRFToken } from "blitz"
 import _ from "lodash"
-
+import { mapValues } from "remeda"
 /*
  * This file is just for a pleasant getting started page for your new app.
  * You can delete everything in here and start from scratch if you like.
@@ -67,10 +68,13 @@ const Home: BlitzPage<PageProps> = ({ xr_id }) => {
   interface User {
     id: string
     info: object
+    color: string
   }
 
+  const [pusherChannel, setPusherChannel] = useState<PusherTypes.PresenceChannel | null>(null)
   const [view, setView] = useState(views[0])
-  const [users, setUsers] = useState<User[]>([])
+  const [users, setUsers] = useState<{ [name: string]: User }>({})
+  const [size, setSize] = useState({ width: 0, height: 0 })
 
   useEffect(() => {
     const height = Math.max(
@@ -85,6 +89,10 @@ const Home: BlitzPage<PageProps> = ({ xr_id }) => {
       document.body.clientWidth
     )
 
+    setSize({ width, height })
+  }, [])
+
+  useEffect(() => {
     const antiCSRFToken = getAntiCSRFToken()
 
     // Pusher.logToConsole = true
@@ -102,14 +110,21 @@ const Home: BlitzPage<PageProps> = ({ xr_id }) => {
 
     const channel = pusher.subscribe(`presence-quickstart-${xr_id}`)
 
+    //@ts-ignore
+    setPusherChannel(channel)
+  }, [xr_id])
+
+  useEffect(() => {
+    if (!pusherChannel) return
     function addMemberToUserList({ id, info }) {
       const { hashedPassword, ...rest_of_info } = info
-      setUsers((users) => [...users, { id, info: rest_of_info }])
+      const color = `hsl(${hashCode(parseInt(id)) % 360},70%,60%)`
+      setUsers((users) => ({ ...users, [`${id}`]: { id, info: rest_of_info, view, color } }))
       const userEl = document.createElement("div")
       userEl.id = "user_" + id
       userEl.innerText = info.email
       document?.getElementById("user_list")?.appendChild(userEl)
-      userEl.style.backgroundColor = `hsl(${hashCode(parseInt(id)) % 360},70%,60%)`
+      userEl.style.backgroundColor = color
 
       const span = document.createElement("span")
       span.innerHTML = `&#8598; ${info.email.slice(0, 2)}`
@@ -117,45 +132,76 @@ const Home: BlitzPage<PageProps> = ({ xr_id }) => {
       document.body.appendChild(span)
     }
 
-    channel.bind("pusher:subscription_succeeded", () => {
+    pusherChannel.bind("pusher:subscription_succeeded", () => {
       // @ts-ignore
-      channel.members.each((member) => {
+      pusherChannel.members.each((member) => {
         addMemberToUserList(member)
       })
 
-      channel.bind("pusher:member_added", (member) => {
+      pusherChannel.bind("pusher:member_added", (member) => {
         addMemberToUserList(member)
       })
 
-      channel.bind("client-mousemove", ({ x, y }, { user_id }) => {
-        const cursor = document.querySelector(`.cursor-${user_id}`)
-
-        // eslint-disable-next-line
-        cursor
-          ? //@ts-ignore
-            (document.querySelector(`.cursor-${user_id}`).style.cssText = `left: ${
-              x * width
-            }px; top: ${y * height}px; color: hsl(${hashCode(parseInt(user_id)) % 360},70%,60%);`)
-          : null
-      })
-
-      channel.bind("pusher:member_removed", (member) => {
+      pusherChannel.bind("pusher:member_removed", (member) => {
         const userEl = document.getElementById("user_" + member.id)
         userEl?.parentNode?.removeChild(userEl)
         const cursorEl = document.querySelector(`.cursor-${member.id}`)
-        console.log({ cursorEl, member })
 
         cursorEl?.parentNode?.removeChild(cursorEl)
       })
+
+      pusherChannel.bind("client-view-change", ({ view }, { user_id }) => {
+        setUsers((users) =>
+          mapValues(users, (user) => (user.id === user_id ? { ...user, view } : user))
+        )
+      })
     })
 
-    document.addEventListener(
-      "mousemove",
-      _.throttle((e) => {
-        channel.trigger("client-mousemove", { x: e.pageX / width, y: e.pageY / height })
-      }, 125)
-    )
-  }, [xr_id])
+    const mouseListener = _.throttle((e) => {
+      pusherChannel.trigger("client-mousemove", {
+        x: e.pageX / size.width,
+        y: e.pageY / size.height,
+      })
+    }, 125)
+
+    document.addEventListener("mousemove", mouseListener)
+    return () => document.removeEventListener("mousemove", mouseListener)
+  }, [pusherChannel, xr_id, view, users, size])
+
+  useEffect(() => {
+    if (!pusherChannel || Object.values(users).length < 2) return
+
+    pusherChannel.bind("client-mousemove", ({ x, y }, { user_id }) => {
+      const cursor = document.querySelector(`.cursor-${user_id}`)
+      console.log({ user_id, users })
+
+      // eslint-disable-next-line
+      cursor
+        ? //@ts-ignore
+          (document.querySelector(`.cursor-${user_id}`).style.cssText = `left: ${
+            x * size.width
+          }px; top: ${y * size.height}px; color: ${users[user_id].color};`)
+        : null
+    })
+  }, [users, pusherChannel, size])
+
+  useEffect(() => {
+    if (!pusherChannel) return
+    pusherChannel.trigger("client-view-change", { view })
+  }, [view, pusherChannel])
+
+  const Circle = (props) => (
+    <div
+      {...props}
+      style={{
+        borderRadius: "100%",
+        border: "1px solid black",
+        height: "1em",
+        width: "1em",
+        margin: "1em",
+      }}
+    ></div>
+  )
 
   return (
     <div className="container">
@@ -169,6 +215,11 @@ const Home: BlitzPage<PageProps> = ({ xr_id }) => {
         </div>
 
         <div style={{ border: "3px dotted black", padding: "3em" }}>{view}</div>
+        <div style={{ margin: "2em", display: "flex" }}>
+          {views.map((view) => (
+            <Circle key={view} onClick={() => setView(view)} />
+          ))}
+        </div>
         <pre>{JSON.stringify(users, null, 2)}</pre>
 
         <div className="buttons" style={{ marginTop: "5rem" }}>

@@ -9431,6 +9431,11 @@ regjsparser@^0.6.4:
   dependencies:
     jsesc "~0.5.0"
 
+remeda@0.0.23:
+  version "0.0.23"
+  resolved "https://registry.yarnpkg.com/remeda/-/remeda-0.0.23.tgz#8eecf52e6f5b62212e95fb268887576d3ce8d17b"
+  integrity sha512-bd6t3Y9LlzO3uk/N8VyFZC3ozqpTJcYtFgH6r4V9kRjkDQXo7Fcy0DrQDn5bU047WAU0lhoY9zA60thHKl7uAA==
+
 remove-bom-buffer@^3.0.0:
   version "3.0.0"
   resolved "https://registry.yarnpkg.com/remove-bom-buffer/-/remove-bom-buffer-3.0.0.tgz#c2bf1e377520d324f623892e33c10cac2c252b53"
