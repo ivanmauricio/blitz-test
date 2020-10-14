@@ -20,9 +20,9 @@ const route = async (req, res) => {
   // the client should provide a proof of identity, like a session cookie.
   const user = await db.user.findOne({ where: { id: userId } })
 
-  // @ts-ignore
   const auth = pusher.authenticate(socketId, channel, {
     user_id: `${userId}`,
+    // @ts-ignore
     user_info: { ...user },
   })
 
