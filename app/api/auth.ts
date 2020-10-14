@@ -21,7 +21,10 @@ const route = async (req, res) => {
   const user = await db.user.findOne({ where: { id: userId } })
 
   // @ts-ignore
-  const auth = pusher.authenticate(socketId, channel, { user_id: userId, user_info: { ...user } })
+  const auth = pusher.authenticate(socketId, channel, {
+    user_id: `${userId}`,
+    user_info: { ...user },
+  })
 
   res.send(auth)
 }
