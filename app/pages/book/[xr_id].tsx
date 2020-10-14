@@ -1,13 +1,13 @@
-import { Link, BlitzPage } from "blitz"
+import { BlitzPage } from "blitz"
+import { getSessionContext } from "@blitzjs/server"
+
 import Layout from "app/layouts/Layout"
-import logout from "app/auth/mutations/logout"
-import { useCurrentUser } from "app/hooks/useCurrentUser"
-import { Suspense, useEffect, useState } from "react"
+import { useEffect, useState, useCallback } from "react"
 import Pusher from "pusher-js"
 import * as PusherTypes from "pusher-js"
 import { getAntiCSRFToken } from "blitz"
 import _ from "lodash"
-import { mapValues } from "remeda"
+import { mapValues, pipe } from "remeda"
 /*
  * This file is just for a pleasant getting started page for your new app.
  * You can delete everything in here and start from scratch if you like.
@@ -20,61 +20,86 @@ const hashCode = (s) => {
   }, 0)
 }
 
-const UserInfo = () => {
-  const currentUser = useCurrentUser()
-  if (currentUser) {
-    return (
-      <>
-        <button
-          className="button small"
-          onClick={async () => {
-            await logout()
-          }}
-        >
-          Logout
-        </button>
-        <div>
-          User id: <code>{currentUser.id}</code>
-          <br />
-          User role: <code>{currentUser.role}</code>
-        </div>
-      </>
-    )
-  } else {
-    return (
-      <>
-        <Link href="/signup">
-          <a className="button small">
-            <strong>Sign Up</strong>
-          </a>
-        </Link>
-        <Link href="/login">
-          <a className="button small">
-            <strong>Login</strong>
-          </a>
-        </Link>
-      </>
-    )
-  }
+const Circle = ({ view, users, ...rest }) => {
+  const userList: User[] = pipe(
+    users,
+    mapValues((user) => ({ view: user.view, color: user.color })),
+    Object.values
+  )
+
+  const UserCircle = ({ index, color }) => (
+    <div
+      style={{
+        borderRadius: "100%",
+        border: `1px solid ${color}`,
+        height: `1.${index * 2}em`,
+        width: `1.${index * 2}em`,
+        position: "absolute",
+        left: `calc(-0.${index}em - 1px)`,
+        top: `calc(-0.${index}em - 1px)`,
+      }}
+    ></div>
+  )
+
+  return (
+    <div
+      {...rest}
+      style={{
+        borderRadius: "100%",
+        border: "1px solid black",
+        height: "1em",
+        width: "1em",
+        margin: "1em",
+        position: "relative",
+      }}
+    >
+      {userList.map(
+        ({ view: userView, color }, index) =>
+          view === userView && <UserCircle color={color} index={index + 1} key={color} />
+      )}
+    </div>
+  )
 }
 
 type PageProps = {
   xr_id: string
+  user_id: string
+}
+
+interface User {
+  id: string
+  info: object
+  color: string
+  view: string
 }
 
 const views = ["Discussion", "Author", "Mind"]
 
-const Home: BlitzPage<PageProps> = ({ xr_id }) => {
-  interface User {
-    id: string
-    info: object
-    color: string
-  }
-
+const Book: BlitzPage<PageProps> = ({ xr_id, user_id }) => {
   const [pusherChannel, setPusherChannel] = useState<PusherTypes.PresenceChannel | null>(null)
   const [view, setView] = useState(views[0])
   const [users, setUsers] = useState<{ [name: string]: User }>({})
   const [size, setSize] = useState({ width: 0, height: 0 })
+
+  const addMemberToUserList = useCallback(
+    ({ id, info }) => {
+      const { hashedPassword, ...rest_of_info } = info
+      const color = `hsl(${hashCode(info.email) % 360},70%,60%)`
+      setUsers((users) => ({ ...users, [`${id}`]: { id, info: rest_of_info, view, color } }))
+
+      // const userEl = document.createElement("div")
+      // userEl.id = "user_" + id
+      // userEl.innerText = info.email
+      // document?.getElementById("user_list")?.appendChild(userEl)
+      // userEl.style.backgroundColor = color
+
+      const span = document.createElement("span")
+      span.innerHTML = `&#8598; ${info.email.slice(0, 2)}`
+      span.className = `cursor-${id} cursor`
+      document.body.appendChild(span)
+    },
+    [view]
+  )
 
   useEffect(() => {
     const height = Math.max(
@@ -116,21 +141,6 @@ const Home: BlitzPage<PageProps> = ({ xr_id }) => {
 
   useEffect(() => {
     if (!pusherChannel) return
-    function addMemberToUserList({ id, info }) {
-      const { hashedPassword, ...rest_of_info } = info
-      const color = `hsl(${hashCode(parseInt(id)) % 360},70%,60%)`
-      setUsers((users) => ({ ...users, [`${id}`]: { id, info: rest_of_info, view, color } }))
-      const userEl = document.createElement("div")
-      userEl.id = "user_" + id
-      userEl.innerText = info.email
-      document?.getElementById("user_list")?.appendChild(userEl)
-      userEl.style.backgroundColor = color
-
-      const span = document.createElement("span")
-      span.innerHTML = `&#8598; ${info.email.slice(0, 2)}`
-      span.className = `cursor-${id} cursor`
-      document.body.appendChild(span)
-    }
 
     pusherChannel.bind("pusher:subscription_succeeded", () => {
       // @ts-ignore
@@ -139,24 +149,45 @@ const Home: BlitzPage<PageProps> = ({ xr_id }) => {
       })
 
       pusherChannel.bind("pusher:member_added", (member) => {
+        console.log({ memberAdded: member })
+
         addMemberToUserList(member)
       })
 
       pusherChannel.bind("pusher:member_removed", (member) => {
-        const userEl = document.getElementById("user_" + member.id)
-        userEl?.parentNode?.removeChild(userEl)
-        const cursorEl = document.querySelector(`.cursor-${member.id}`)
-
-        cursorEl?.parentNode?.removeChild(cursorEl)
-      })
-
-      pusherChannel.bind("client-view-change", ({ view }, { user_id }) => {
-        setUsers((users) =>
-          mapValues(users, (user) => (user.id === user_id ? { ...user, view } : user))
-        )
+        setUsers((users) => {
+          const { [member.id]: _removedUser, ...rest } = users
+          return rest
+        })
       })
     })
+  }, [pusherChannel, xr_id, view, users, size, addMemberToUserList])
 
+  useEffect(() => {
+    if (!pusherChannel || Object.values(users).length < 2) return
+
+    pusherChannel.bind("client-view-change", ({ view }, { user_id }) => {
+      setUsers((users) =>
+        mapValues(users, (user) => (user.id === user_id ? { ...user, view } : user))
+      )
+    })
+
+    pusherChannel.bind("client-mousemove", ({ x, y }, { user_id }) => {
+      const cursor = document.querySelector(`.cursor-${user_id}`)
+
+      // eslint-disable-next-line
+      cursor
+        ? //@ts-ignore
+          (document.querySelector(`.cursor-${user_id}`).style.cssText = `left: ${
+            x * size.width
+            // }px; top: ${y * size.height}px; color: ${users[user_id].color};`)
+          }px; top: ${y * size.height}px; color: ${users[user_id].color};`)
+        : null
+    })
+  }, [pusherChannel, size, users, addMemberToUserList])
+
+  useEffect(() => {
+    if (!pusherChannel) return
     const mouseListener = _.throttle((e) => {
       pusherChannel.trigger("client-mousemove", {
         x: e.pageX / size.width,
@@ -166,58 +197,54 @@ const Home: BlitzPage<PageProps> = ({ xr_id }) => {
 
     document.addEventListener("mousemove", mouseListener)
     return () => document.removeEventListener("mousemove", mouseListener)
-  }, [pusherChannel, xr_id, view, users, size])
-
-  useEffect(() => {
-    if (!pusherChannel || Object.values(users).length < 2) return
-
-    pusherChannel.bind("client-mousemove", ({ x, y }, { user_id }) => {
-      const cursor = document.querySelector(`.cursor-${user_id}`)
-      console.log({ user_id, users })
-
-      // eslint-disable-next-line
-      cursor
-        ? //@ts-ignore
-          (document.querySelector(`.cursor-${user_id}`).style.cssText = `left: ${
-            x * size.width
-          }px; top: ${y * size.height}px; color: ${users[user_id].color};`)
-        : null
-    })
-  }, [users, pusherChannel, size])
+  }, [pusherChannel, size])
 
   useEffect(() => {
     if (!pusherChannel) return
-    pusherChannel.trigger("client-view-change", { view })
-  }, [view, pusherChannel])
+    setUsers((users) =>
+      mapValues(users, (user) => (user.id === `${user_id}` ? { ...user, view } : user))
+    )
+    pusherChannel && pusherChannel.trigger("client-view-change", { view })
+  }, [view, pusherChannel, user_id])
 
-  const Circle = (props) => (
-    <div
-      {...props}
-      style={{
-        borderRadius: "100%",
-        border: "1px solid black",
-        height: "1em",
-        width: "1em",
-        margin: "1em",
-      }}
-    ></div>
-  )
+  //todo: change color for diff. users
 
   return (
     <div className="container">
       <main>
-        <div id="user_list"></div>
+        <div id="user_list">
+          {/* const userEl = document.createElement("div")
+      userEl.id = "user_" + id
+      userEl.innerText = info.email
+      document?.getElementById("user_list")?.appendChild(userEl)
+      userEl.style.backgroundColor = color */}
+          {Object.values(users).map((user) => {
+            return (
+              <div
+                id={`user_${user.id}`}
+                style={{ backgroundColor: user.color }}
+                // @ts-ignore
+                key={user.info.email}
+              >
+                {
+                  // @ts-ignore
+                  user.info.email
+                }
+              </div>
+            )
+          })}
+        </div>
 
-        <div className="buttons" style={{ marginTop: "1rem", marginBottom: "5rem" }}>
+        {/* <div className="buttons" style={{ marginTop: "1rem", marginBottom: "5rem" }}>
           <Suspense fallback="Loading...">
             <UserInfo />
           </Suspense>
-        </div>
+        </div> */}
 
         <div style={{ border: "3px dotted black", padding: "3em" }}>{view}</div>
         <div style={{ margin: "2em", display: "flex" }}>
           {views.map((view) => (
-            <Circle key={view} onClick={() => setView(view)} />
+            <Circle key={view} onClick={() => setView(view)} users={users} view={view} />
           ))}
         </div>
         <pre>{JSON.stringify(users, null, 2)}</pre>
@@ -409,13 +436,15 @@ const Home: BlitzPage<PageProps> = ({ xr_id }) => {
   )
 }
 
-Home.getLayout = (page) => <Layout title="Home">{page}</Layout>
+Book.getLayout = (page) => <Layout title="Book">{page}</Layout>
 
-export const getServerSideProps = async (context) => {
-  const params = context.params
+export const getServerSideProps = async (ctx) => {
+  const session = await getSessionContext(ctx.req, ctx.res)
+
+  const params = ctx.params
   const xr_id: string = params.xr_id
-  const props: PageProps = { xr_id }
+  const props: PageProps = { xr_id, user_id: session.userId }
   return { props }
 }
 
-export default Home
+export default Book
